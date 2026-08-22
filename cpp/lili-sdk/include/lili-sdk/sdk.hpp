@@ -1,7 +1,10 @@
 #pragma once
 
-#include <cstdint>
-#include <string>
+#include <stdint.h>
+#include <stddef.h>
+
+// This header is C-compatible: a C compiler can include it to use the SDK.
+// The C++ API surface is only the struct + function declarations below.
 
 #ifdef __cplusplus
 extern "C" {
@@ -13,7 +16,7 @@ typedef struct {
 } lili_keypair_t;
 
 typedef struct {
-    uint64_t id;
+    char* id;               // NIP-01 64-char hex event id (owned, heap)
     uint64_t created_at;
     uint16_t kind;
     char* content;

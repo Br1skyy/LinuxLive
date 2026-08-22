@@ -241,6 +241,23 @@ float PassiveScanner::get_progress_percent() const {
     return (unlocked * 100.0f) / achievements_.size();
 }
 
+void PassiveScanner::mark_unlocked(const std::string& id, uint64_t unlocked_at) {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        bool changed = false;
+        for (auto& ach : achievements_) {
+            if (ach.id == id && !ach.unlocked) {
+                ach.unlocked = true;
+                ach.unlocked_at = unlocked_at;
+                changed = true;
+                if (unlock_callback_) unlock_callback_(ach);
+            }
+        }
+        if (!changed) return;
+    }
+    save_state();
+}
+
 void PassiveScanner::save_state() {
     if (persistence_) persistence_->save_achievements(achievements_);
 }

@@ -9,6 +9,8 @@
 #include "lili-core/persistence.hpp"
 #include "lili-core/passive_scanner.hpp"
 #include "lili-core/relay_client.hpp"
+#include "lili-core/discoverer.hpp"
+#include "lili-relay/relay_server.hpp"
 
 namespace lili {
 
@@ -24,12 +26,7 @@ struct NodeInfo {
     std::string name;
     std::string description;
     std::string creator_pubkey;
-    std::string admin_privkey;
-    std::string relay_url;
     uint64_t created_at;
-    int member_count;
-    bool is_local;
-    bool running;
 };
 
 class App {
@@ -54,26 +51,53 @@ public:
     static void on_export_achievements(GtkWidget* w, gpointer d);
     static void on_import_achievements(GtkWidget* w, gpointer d);
 
-    static void on_create_node(GtkWidget* w, gpointer d);
-    static void on_node_toggle(GtkWidget* w, gpointer d);
     static void on_node_info(GtkWidget* w, gpointer d);
-    static void on_node_delete(GtkWidget* w, gpointer d);
     static void on_chat_node_clicked(GtkWidget* w, gpointer d);
     static void on_back_to_nodes(GtkWidget* w, gpointer d);
 
     static void on_send_message(GtkWidget* w, gpointer d);
 
-    static void on_relay_url_changed(GtkEditable* ed, gpointer d);
-    static void on_connect_relay(GtkWidget* w, gpointer d);
-    static void on_add_relay(GtkWidget* w, gpointer d);
-    static void on_remove_relay(GtkWidget* w, gpointer d);
-    static void on_connect_relay_row(GtkWidget* w, gpointer d);
+    // The subnode's single hub: connect to its master.
+    static void on_connect_master(GtkWidget* w, gpointer d);
+
+    // Master-node (subnode) registration.
+    static void on_discover_masters(GtkWidget* w, gpointer d);
+    static void on_register_subnode(GtkWidget* w, gpointer d);
+    void populate_master_list();
+    void update_master_status(const std::string& text);
+    gboolean heartbeat_tick();
+
+    // Role-based UI (master dashboard + settings; role switch).
+    static void on_role_switch_to_master(GtkWidget* w, gpointer d);
+    static void on_role_switch_to_subnode(GtkWidget* w, gpointer d);
+    static void on_role_switch_to_hybrid(GtkWidget* w, gpointer d);
+    static void on_master_start_stop(GtkWidget* w, gpointer d);
+    static void on_master_save_settings(GtkWidget* w, gpointer d);
+    static void on_hybrid_save_settings(GtkWidget* w, gpointer d);
+    static void on_master_create_room(GtkWidget* w, gpointer d);
+    static gboolean master_refresh_cb(gpointer d);
+    static void on_master_subnode_selected(GtkListBox* box, GtkListBoxRow* row, gpointer d);
+
+    void apply_role();
+    void rebuild_notebook();
+    void start_master_server();
+    void stop_master_server();
+    void refresh_master_dashboard();
+    void refresh_leaderboard();
+    void update_master_detail();
+    void begin_subnode_work(bool report_to_self);
+    void self_register();
+    void publish_stats_now();
 
 private:
     void build_profile_page(GtkWidget* nb);
     void build_achievements_page(GtkWidget* nb);
     void build_nodes_page(GtkWidget* nb);
     void build_settings_page(GtkWidget* nb);
+    void build_master_dashboard_page(GtkWidget* nb);
+    void build_master_settings_page(GtkWidget* nb);
+    void build_hybrid_settings_page(GtkWidget* nb);
+    void build_leaderboard_page(GtkWidget* nb);
 
     void switch_to_main();
     void switch_to_node_list();
@@ -88,8 +112,7 @@ private:
     void refresh_chat();
     void update_profile_summary();
     void load_persisted_data();
-    void save_nodes();
-    void refresh_relay_list();
+    void update_master_conn_status();
 
     std::string resolve_display_name(const std::string& pubkey) const;
 
@@ -130,8 +153,37 @@ private:
     GtkWidget* chat_input_ = nullptr;
     GtkListStore* chat_store_ = nullptr;
 
-    GtkWidget* relay_url_entry_ = nullptr;
-    GtkWidget* relay_list_box_ = nullptr;
+    GtkWidget* master_url_entry_ = nullptr;
+    GtkWidget* master_conn_status_ = nullptr;
+
+    // --- Role-based UI ---
+    GtkWidget* notebook_ = nullptr;            // the tab notebook
+    std::string role_ = "subnode";             // "master" | "subnode"
+    std::unique_ptr<RelayServer> master_server_;
+    guint master_refresh_source_ = 0;
+    guint subnode_stats_source_ = 0;
+
+    // Master dashboard widgets.
+    GtkWidget* master_status_label_ = nullptr;
+    GtkWidget* master_subnode_list_ = nullptr; // GtkListBox of subnodes
+    GtkWidget* master_detail_label_ = nullptr;
+    GtkWidget* leaderboard_list_ = nullptr;
+    GtkWidget* master_name_entry_ = nullptr;
+    GtkWidget* master_port_entry_ = nullptr;
+    GtkWidget* master_passphrase_entry_ = nullptr;
+    GtkWidget* master_start_stop_btn_ = nullptr;
+    GtkWidget* master_settings_status_ = nullptr;
+    GtkWidget* master_room_entry_ = nullptr;
+    std::string selected_subnode_pubkey_;
+
+    GtkWidget* subnode_scan_list_ = nullptr;
+    GtkWidget* subnode_register_passphrase_ = nullptr;
+    GtkWidget* subnode_register_status_ = nullptr;
+    std::vector<DiscoveredMaster> discovered_masters_;
+    int selected_master_index_ = -1;
+    bool registered_ = false;
+    bool ack_accepted_ = false;
+    std::string ack_message_;
 
     GtkWidget* status_bar_ = nullptr;
     GtkWidget* relay_status_dot_ = nullptr;
@@ -143,7 +195,6 @@ private:
     RelayClient relay_;
     std::vector<NodeInfo> nodes_;
     std::vector<ChatMessage> messages_;
-    std::vector<std::string> relay_list_;
     std::string current_node_id_;
     std::string current_privkey_hex_;
     std::string current_pubkey_hex_;

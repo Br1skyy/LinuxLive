@@ -69,9 +69,16 @@ bool ClientSession::send_raw(const uint8_t* data, size_t len) {
 }
 
 bool ClientSession::recv_raw(uint8_t* buf, size_t len, size_t* out_len) {
-    ssize_t n = ::recv(socket_fd_, buf, len, 0);
-    if (n <= 0) { *out_len = 0; return false; }
-    *out_len = n;
+    // Accumulate until exactly len bytes are read: a single recv() may return
+    // fewer bytes than requested (partial reads), which would otherwise drop
+    // frames whose headers arrive in more than one TCP segment.
+    size_t total = 0;
+    while (total < len) {
+        ssize_t n = ::recv(socket_fd_, buf + total, len - total, 0);
+        if (n <= 0) { *out_len = total; return false; }
+        total += static_cast<size_t>(n);
+    }
+    *out_len = total;
     return true;
 }
 
@@ -149,6 +156,14 @@ void ClientSession::ws_read_loop() {
             payload_len = 0;
             for (int i = 0; i < 8; i++)
                 payload_len = (payload_len << 8) | ext[i];
+        }
+
+        // Cap frame size to prevent a peer from forcing an unbounded
+        // allocation (DoS).
+        constexpr uint64_t MAX_FRAME = 16ULL * 1024 * 1024;
+        if (payload_len > MAX_FRAME) {
+            ws_send_frame(0x08, nullptr, 0);  // close frame
+            break;
         }
 
         uint8_t mask[4] = {};

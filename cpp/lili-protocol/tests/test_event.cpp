@@ -17,7 +17,7 @@ void test_event_creation() {
 
 void test_event_serialization() {
     lili::Event event;
-    event.id = 12345;
+    event.id = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     event.created_at = static_cast<uint64_t>(time(nullptr));
     event.kind = 1;
     event.content = "Test content";

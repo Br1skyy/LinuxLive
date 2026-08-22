@@ -126,12 +126,7 @@ bool Persistence::save_nodes(const std::vector<StoredNode>& nodes) {
             {"name", n.name},
             {"description", n.description},
             {"creator_pubkey", n.creator_pubkey},
-            {"admin_privkey", n.admin_privkey},
-            {"relay_url", n.relay_url},
-            {"created_at", n.created_at},
-            {"member_count", n.member_count},
-            {"is_local", n.is_local},
-            {"running", n.running}
+            {"created_at", n.created_at}
         });
     }
     std::ofstream f(nodes_path());
@@ -152,12 +147,7 @@ std::vector<StoredNode> Persistence::load_nodes() {
             n.name = item["name"].get<std::string>();
             n.description = item.value("description", "");
             n.creator_pubkey = item.value("creator_pubkey", "");
-            n.admin_privkey = item.value("admin_privkey", "");
-            n.relay_url = item.value("relay_url", "");
             n.created_at = item.value("created_at", 0ULL);
-            n.member_count = item.value("member_count", 1);
-            n.is_local = item.value("is_local", false);
-            n.running = item.value("running", n.is_local);
             result.push_back(n);
         }
     } catch (...) {}
@@ -207,6 +197,88 @@ std::string Persistence::load_relay_url() {
     } catch (...) {
         return "ws://localhost:8080";
     }
+}
+
+std::string Persistence::master_config_path() const {
+    return IdentityManager::data_dir() + "/master_config.json";
+}
+
+static nlohmann::json read_master_config(const std::string& path) {
+    std::ifstream f(path);
+    if (!f) return nlohmann::json::object();
+    try { return nlohmann::json::parse(f); }
+    catch (...) { return nlohmann::json::object(); }
+}
+
+bool Persistence::save_role(const std::string& role) {
+    auto j = read_master_config(master_config_path());
+    j["role"] = role;
+    std::ofstream f(master_config_path());
+    f << j.dump(2);
+    return f.good();
+}
+
+std::string Persistence::load_role() {
+    auto j = read_master_config(master_config_path());
+    auto it = j.find("role");
+    return (it != j.end() && it->is_string()) ? it->get<std::string>() : "subnode";
+}
+
+bool Persistence::save_master_name(const std::string& name) {
+    auto j = read_master_config(master_config_path());
+    j["master_name"] = name;
+    std::ofstream f(master_config_path());
+    f << j.dump(2);
+    return f.good();
+}
+
+std::string Persistence::load_master_name() {
+    auto j = read_master_config(master_config_path());
+    auto it = j.find("master_name");
+    return (it != j.end() && it->is_string()) ? it->get<std::string>() : "LinuxLive Master";
+}
+
+bool Persistence::save_master_port(uint16_t port) {
+    auto j = read_master_config(master_config_path());
+    j["master_port"] = port;
+    std::ofstream f(master_config_path());
+    f << j.dump(2);
+    return f.good();
+}
+
+uint16_t Persistence::load_master_port() {
+    auto j = read_master_config(master_config_path());
+    auto it = j.find("master_port");
+    return (it != j.end() && it->is_number_integer())
+        ? (uint16_t)it->get<int>() : 7777;
+}
+
+bool Persistence::save_master_passphrase(const std::string& pass) {
+    auto j = read_master_config(master_config_path());
+    j["master_passphrase"] = pass;
+    std::ofstream f(master_config_path());
+    f << j.dump(2);
+    return f.good();
+}
+
+std::string Persistence::load_master_passphrase() {
+    auto j = read_master_config(master_config_path());
+    auto it = j.find("master_passphrase");
+    return (it != j.end() && it->is_string()) ? it->get<std::string>() : "";
+}
+
+bool Persistence::save_master_url(const std::string& url) {
+    auto j = read_master_config(master_config_path());
+    j["master_url"] = url;
+    std::ofstream f(master_config_path());
+    f << j.dump(2);
+    return f.good();
+}
+
+std::string Persistence::load_master_url() {
+    auto j = read_master_config(master_config_path());
+    auto it = j.find("master_url");
+    return (it != j.end() && it->is_string()) ? it->get<std::string>() : "";
 }
 
 bool Persistence::save_friends(const std::string& pubkey, const std::vector<std::string>& friend_pubkeys) {

@@ -14,6 +14,8 @@ add_library(lili-core STATIC
     src/encryption.cpp
     src/relay_client.cpp
     src/ws_client.cpp
+    src/discoverer.cpp
+    src/system_stats.cpp
 )
 
 target_include_directories(lili-core PUBLIC include)

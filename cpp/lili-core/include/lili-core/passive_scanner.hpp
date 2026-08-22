@@ -38,6 +38,9 @@ public:
     std::vector<StoredAchievement> get_achievements() const;
     int get_unlocked_count() const;
     float get_progress_percent() const;
+    // Mark one achievement unlocked (used to merge achievements pulled from a
+    // master/relay). No-op if already unlocked or unknown.
+    void mark_unlocked(const std::string& id, uint64_t unlocked_at);
 
     using UnlockCallback = std::function<void(const StoredAchievement&)>;
     void set_unlock_callback(UnlockCallback cb);

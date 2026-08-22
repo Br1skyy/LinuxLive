@@ -12,6 +12,7 @@ add_subdirectory(cpp/lili-relay)
 add_subdirectory(cpp/lili-sdk)
 add_subdirectory(cpp/lili-core)
 add_subdirectory(cpp/lili-gui)
+add_subdirectory(cpp/lili-cli)
 
 if(BUILD_TESTING)
     enable_testing()

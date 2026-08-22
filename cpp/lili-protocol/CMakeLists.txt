@@ -20,6 +20,7 @@ add_library(lili-protocol
     src/event.cpp
     src/signing.cpp
     src/nip58.cpp
+    src/subnode.cpp
 )
 
 target_include_directories(lili-protocol PUBLIC include)

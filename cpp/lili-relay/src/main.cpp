@@ -30,6 +30,9 @@ void print_usage(const char* prog) {
               << "  -t, --ttl SEC             Default event TTL in seconds (default: 604800 = 7 days)\n"
               << "  --kind-ttl KIND:SEC       Per-kind TTL (e.g. 30079:0 for achievements = forever)\n"
               << "  --ban PUBKEY              Ban a pubkey and delete all their events\n"
+              << "  --master                  Run as a master node (subnode registry/authority)\n"
+              << "  --name NAME               Master display name (advertised in discovery)\n"
+              << "  --passphrase PASS         Require this passphrase for subnode registration\n"
               << "  -h, --help                Show this help\n\n"
               << "Event Kind TTLs (default):\n"
               << "  Kind 30079 (achievement): forever\n"
@@ -71,6 +74,12 @@ int main(int argc, char* argv[]) {
             }
         } else if (arg == "--ban" && i + 1 < argc) {
             config.banned_pubkeys.insert(argv[++i]);
+        } else if (arg == "--master") {
+            config.master_mode = true;
+        } else if (arg == "--name" && i + 1 < argc) {
+            config.master_name = argv[++i];
+        } else if (arg == "--passphrase" && i + 1 < argc) {
+            config.registration_passphrase = argv[++i];
         } else if (arg == "-h" || arg == "--help") {
             print_usage(argv[0]);
             return 0;

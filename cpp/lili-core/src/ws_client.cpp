@@ -306,7 +306,6 @@ void WsClient::recv_loop() {
             break;
         }
 
-        bool fin = hdr[0] & 0x80;
         uint8_t opcode = hdr[0] & 0x0F;
         bool masked = hdr[1] & 0x80;
         uint64_t payload_len = hdr[1] & 0x7F;
@@ -321,6 +320,14 @@ void WsClient::recv_loop() {
             payload_len = 0;
             for (int i = 0; i < 8; i++)
                 payload_len = (payload_len << 8) | ext[i];
+        }
+
+        // Cap frame size to prevent a malicious/erroneous server from forcing
+        // an unbounded allocation.
+        constexpr uint64_t MAX_FRAME = 16ULL * 1024 * 1024;
+        if (payload_len > MAX_FRAME) {
+            if (connected_) { connected_ = false; if (on_close_) on_close_(); }
+            break;
         }
 
         uint8_t server_mask[4] = {};

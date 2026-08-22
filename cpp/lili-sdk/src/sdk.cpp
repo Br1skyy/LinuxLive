@@ -27,7 +27,7 @@ lili_event_t* lili_create_achievement(const char* name, const char* description,
     auto event = lili::create_achievement_event(achievement, kp);
 
     auto result = new lili_event_t;
-    result->id = event.id;
+    result->id = strdup(event.id.c_str());
     result->created_at = event.created_at;
     result->kind = event.kind;
     result->content = strdup(event.content.c_str());
@@ -51,7 +51,8 @@ lili_event_t* lili_sign_event(lili_event_t* event, const lili_keypair_t* kp) {
 
     auto signed_event = lili::sign_event(native_event, native_kp);
 
-    event->id = signed_event.id;
+    free(event->id);
+    event->id = strdup(signed_event.id.c_str());
     free(event->pubkey);
     event->pubkey = strdup(signed_event.pubkey.c_str());
     free(event->sig);
@@ -61,6 +62,7 @@ lili_event_t* lili_sign_event(lili_event_t* event, const lili_keypair_t* kp) {
 }
 
 void lili_free_event(lili_event_t* event) {
+    free(event->id);
     free(event->content);
     free(event->pubkey);
     free(event->sig);

@@ -20,6 +20,9 @@ public:
     bool is_running() const { return running_; }
     bool is_websocket() const { return ws_handshake_done_; }
 
+    void set_peer_ip(const std::string& ip) { peer_ip_ = ip; }
+    const std::string& peer_ip() const { return peer_ip_; }
+
     void send_ws_text(const std::string& message);
 
     using MessageCallback = std::function<void(const std::string&)>;
@@ -34,6 +37,7 @@ private:
     bool ws_send_frame(uint8_t opcode, const uint8_t* payload, size_t len);
 
     int socket_fd_;
+    std::string peer_ip_;
     std::atomic<bool> running_;
     std::atomic<bool> ws_handshake_done_;
     std::thread read_thread_;

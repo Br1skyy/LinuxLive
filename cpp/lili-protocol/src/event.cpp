@@ -23,7 +23,7 @@ std::optional<Event> Event::deserialize(const std::string& data) {
     try {
         auto j = nlohmann::json::parse(data);
         Event event;
-        event.id = j["id"].get<uint64_t>();
+        event.id = j["id"].get<std::string>();
         event.created_at = j["created_at"].get<uint64_t>();
         event.kind = j["kind"].get<uint16_t>();
         event.tags = j["tags"].get<std::vector<std::vector<std::string>>>();

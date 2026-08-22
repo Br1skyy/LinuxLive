@@ -1,5 +1,8 @@
 #pragma once
 
+#include "lili-relay/subnode_registry.hpp"
+#include "lili-relay/discovery.hpp"
+#include "lili-protocol/signing.hpp"
 #include <memory>
 #include <vector>
 #include <unordered_set>
@@ -43,6 +46,15 @@ struct RelayConfig {
 
     std::unordered_set<uint16_t> allowed_kinds;
     std::unordered_set<std::string> banned_pubkeys;
+
+    // Master (subnode-authority) mode.
+    bool master_mode = false;
+    std::string master_name;            // human name advertised in discovery
+    std::string registration_passphrase; // empty = open registration
+
+    // Hybrid mode: bind only to loopback and do NOT advertise via discovery,
+    // so no other subnode can connect — the hub is private to this machine.
+    bool loopback_only = false;
 };
 
 class RelayServer {
@@ -53,6 +65,7 @@ public:
     void start();
     void stop();
     bool is_running() const { return running_; }
+    uint16_t port() const { return port_; }
 
     bool is_event_allowed(uint16_t kind) const;
     void allow_event_kind(uint16_t kind);
@@ -69,7 +82,23 @@ public:
     void delete_event_by_id(const std::string& event_id);
     void print_stats() const;
 
+    // NIP-01 helpers
+    bool has_event(const std::string& event_id) const;
+    bool is_parameterized_replaceable(uint16_t kind) const;
+    void replace_parameterized(const StoredEvent& event);
+
     const RelayConfig& config() const { return config_; }
+
+    // Update the hub's display name without restarting (used by hybrid UI).
+    void set_master_name(const std::string& name) { config_.master_name = name; }
+
+    // Master-dashboard accessors (only meaningful when master_mode).
+    size_t subnode_count() const;
+    std::vector<Subnode> get_subnodes() const;
+    // Snapshot of stored events whose kind is in `kinds`, optionally restricted
+    // to one author. Returns a copy safe to read off the relay thread.
+    std::vector<StoredEvent> get_events(const std::vector<uint16_t>& kinds,
+                                        const std::string& author = "") const;
 
 private:
     void accept_connection();
@@ -85,8 +114,29 @@ private:
     std::deque<StoredEvent> events_;
     mutable std::mutex storage_mutex_;
 
+    // sessions_ is mutated from the accept thread and read when broadcasting,
+    // so it needs its own lock.
+    mutable std::mutex sessions_mutex_;
+
     std::unordered_map<std::string, std::deque<uint64_t>> rate_limit_map_;
     mutable std::mutex rate_mutex_;
+
+    // Master-authority state (used when config_.master_mode).
+    SubnodeRegistry registry_;
+    KeyPair master_keypair_;
+    std::string master_dir_;
+    std::unique_ptr<DiscoveryResponder> discovery_;
+    void handle_register_event(std::shared_ptr<ClientSession> session,
+                               const std::string& subnode_pubkey, const StoredEvent& se,
+                               const std::string& ip);
+    void handle_heartbeat_event(const StoredEvent& se);
+    void load_master_state();
+    void save_master_state();
+    void load_events();
+    void save_events();
+    std::string master_identity_path() const;
+    std::string master_registry_path() const;
+    std::string master_events_path() const;
 };
 
 }

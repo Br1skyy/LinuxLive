@@ -20,6 +20,7 @@ target_link_libraries(lili-gui PRIVATE
     lili-protocol
     lili-sdk
     lili-core
+    lili-relay-core
     ${GTK4_LIBRARIES}
     OpenSSL::Crypto
     OpenSSL::SSL

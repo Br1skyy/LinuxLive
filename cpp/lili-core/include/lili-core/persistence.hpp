@@ -32,12 +32,7 @@ struct StoredNode {
     std::string name;
     std::string description;
     std::string creator_pubkey;
-    std::string admin_privkey;
-    std::string relay_url;
     uint64_t created_at;
-    int member_count;
-    bool is_local;
-    bool running;
 };
 
 class Persistence {
@@ -62,6 +57,19 @@ public:
     bool save_relay_list(const std::vector<std::string>& urls);
     std::vector<std::string> load_relay_list();
 
+    // Role: "master" or "subnode" (persisted; one active role per machine).
+    bool save_role(const std::string& role);
+    std::string load_role();                      // default "subnode"
+
+    bool save_master_name(const std::string& name);
+    std::string load_master_name();               // default "LinuxLive Master"
+    bool save_master_port(uint16_t port);
+    uint16_t load_master_port();                  // default 7777
+    bool save_master_passphrase(const std::string& pass);
+    std::string load_master_passphrase();         // default "" (open)
+    bool save_master_url(const std::string& url);
+    std::string load_master_url();                // subnode's hub URL; default ""
+
     bool save_friends(const std::string& pubkey, const std::vector<std::string>& friend_pubkeys);
     std::vector<std::string> load_friends(const std::string& pubkey);
 
@@ -76,6 +84,7 @@ private:
     std::string messages_dir() const;
     std::string profile_path(const std::string& pubkey) const;
     std::string relay_config_path() const;
+    std::string master_config_path() const;
     std::string friends_path(const std::string& pubkey) const;
 };
 

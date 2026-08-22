@@ -11,6 +11,8 @@ add_library(lili-relay-core
     src/relay_server.cpp
     src/client_session.cpp
     src/message_handler.cpp
+    src/subnode_registry.cpp
+    src/discovery.cpp
 )
 target_include_directories(lili-relay-core PUBLIC include)
 target_link_libraries(lili-relay-core PUBLIC lili-protocol OpenSSL::SSL OpenSSL::Crypto)
