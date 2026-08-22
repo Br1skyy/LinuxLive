@@ -1,0 +1,9 @@
+id: kernel-tamer
+name: "Kernel Tamer"
+description: "You compiled your own kernel. Most people never get this far."
+tier: gold
+category: system
+icon: "🔧"
+criteria:
+  type: kernel
+  custom: true

@@ -1,0 +1,10 @@
+id: ubuntu-user
+name: "Ubuntu User"
+description: "You run Ubuntu. The most popular Linux distro for a reason."
+tier: bronze
+category: distro
+icon: "Circle of Friends"
+exclusive: ubuntu
+criteria:
+  type: os_detect
+  distro: ubuntu

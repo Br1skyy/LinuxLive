@@ -1,0 +1,9 @@
+id: tiling-lord
+name: "Tiling Lord"
+description: "You run a tiling window manager. Your workflow is unmatched."
+tier: silver
+category: system
+icon: "🪟"
+criteria:
+  type: window_manager
+  class: tiling

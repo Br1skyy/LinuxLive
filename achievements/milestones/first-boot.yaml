@@ -1,0 +1,9 @@
+id: first-boot
+name: "First Boot"
+description: "You just launched LinuxLive for the first time. Welcome aboard."
+tier: bronze
+category: milestones
+icon: "🚀"
+criteria:
+  type: always
+  note: "Awarded on first run of LinuxLive"

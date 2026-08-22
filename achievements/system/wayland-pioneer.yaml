@@ -1,0 +1,9 @@
+id: wayland-pioneer
+name: "Wayland Pioneer"
+description: "You run Wayland. Living in the future, one display server at a time."
+tier: bronze
+category: system
+icon: "🌊"
+criteria:
+  type: display_server
+  protocol: wayland

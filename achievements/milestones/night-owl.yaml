@@ -1,0 +1,10 @@
+id: night-owl
+name: "Night Owl"
+description: "You are up past midnight tinkering with Linux. Respect."
+tier: bronze
+category: milestones
+icon: "🦉"
+criteria:
+  type: time
+  after_hour: 0
+  before_hour: 5

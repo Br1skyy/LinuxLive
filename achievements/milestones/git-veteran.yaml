@@ -1,0 +1,9 @@
+id: git-veteran
+name: "Git Veteran"
+description: "You have over 100 commits in a repo. You know your way around version control."
+tier: silver
+category: milestones
+icon: "📋"
+criteria:
+  type: git
+  min_commits: 100

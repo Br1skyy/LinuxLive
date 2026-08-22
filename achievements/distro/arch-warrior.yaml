@@ -1,0 +1,10 @@
+id: arch-warrior
+name: "Arch Warrior"
+description: "You run Arch, by the way. Rolling releases do not scare you."
+tier: silver
+category: distro
+icon: "🏔️"
+exclusive: arch
+criteria:
+  type: os_detect
+  distro: arch

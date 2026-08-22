@@ -1,0 +1,9 @@
+id: docker-captain
+name: "Docker Captain"
+description: "Docker is installed and running. Containers are your thing."
+tier: bronze
+category: system
+icon: "🐳"
+criteria:
+  type: binary
+  name: docker

@@ -1,0 +1,10 @@
+id: chatterbox
+name: "Chatterbox"
+description: "You sent 50 messages. You are officially not shy."
+tier: silver
+category: social
+icon: "💬"
+criteria:
+  type: social
+  action: send_messages
+  min_count: 50

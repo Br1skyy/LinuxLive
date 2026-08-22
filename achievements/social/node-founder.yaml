@@ -1,0 +1,10 @@
+id: node-founder
+name: "Node Founder"
+description: "You created your first chat node. People can gather here now."
+tier: bronze
+category: social
+icon: "🏠"
+criteria:
+  type: social
+  action: create_node
+  min_count: 1

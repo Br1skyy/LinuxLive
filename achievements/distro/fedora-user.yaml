@@ -1,0 +1,10 @@
+id: fedora-user
+name: "Fedora User"
+description: "You run Fedora. Always on the cutting edge of open source."
+tier: bronze
+category: distro
+icon: "🎩"
+exclusive: fedora
+criteria:
+  type: os_detect
+  distro: fedora
