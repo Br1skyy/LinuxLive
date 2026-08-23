@@ -63,7 +63,7 @@ bool RelayClient::connect(const std::string& url, bool tor_proxy) {
     });
 
     bool ok = impl_->ws.connect(url, tor_proxy);
-    if (ok && impl_->connect_cb) impl_->connect_cb(true);
+    if (impl_->connect_cb) impl_->connect_cb(ok);
     return ok;
 }
 

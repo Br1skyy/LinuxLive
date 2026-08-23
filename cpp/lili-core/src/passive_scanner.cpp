@@ -157,6 +157,7 @@ void PassiveScanner::load_definitions() {
 }
 
 void PassiveScanner::start(int interval_seconds) {
+    if (running_) return;  // already scanning; restarting would terminate on thread assignment
     scan_interval_seconds_ = interval_seconds;
     running_ = true;
     scan_thread_ = std::thread(&PassiveScanner::scan_thread_func, this);

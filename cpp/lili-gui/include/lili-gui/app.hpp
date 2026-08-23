@@ -67,6 +67,7 @@ public:
     static void on_connect_relay(GtkWidget* w, gpointer d);
     static void on_add_relay(GtkWidget* w, gpointer d);
     static void on_remove_relay(GtkWidget* w, gpointer d);
+    static void on_connect_relay_row(GtkWidget* w, gpointer d);
 
 private:
     void build_profile_page(GtkWidget* nb);

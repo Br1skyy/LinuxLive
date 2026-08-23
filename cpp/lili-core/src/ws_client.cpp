@@ -3,6 +3,8 @@
 #include <sstream>
 #include <random>
 #include <algorithm>
+#include <cerrno>
+#include <poll.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/rand.h>
@@ -24,7 +26,10 @@ WsClient::WsClient() {
     }
 }
 
-WsClient::~WsClient() { disconnect(); }
+WsClient::~WsClient() {
+    disconnect();
+    if (ctx_) { SSL_CTX_free(ctx_); ctx_ = nullptr; }
+}
 
 bool WsClient::is_connected() const { return connected_; }
 
@@ -33,7 +38,8 @@ void WsClient::disconnect() {
     connected_ = false;
     if (ssl_) { SSL_shutdown(ssl_); SSL_free(ssl_); ssl_ = nullptr; }
     if (fd_ >= 0) { close(fd_); fd_ = -1; }
-    if (ctx_) { SSL_CTX_free(ctx_); ctx_ = nullptr; }
+    // ctx_ intentionally kept: it is created once in the constructor and
+    // reused for every reconnect; freeing here would break wss reconnects.
     if (recv_thread_.joinable()) recv_thread_.join();
 }
 
@@ -44,13 +50,17 @@ static bool parse_ws_url(const std::string& url, bool& use_tls, std::string& hos
     path = "/";
 
     size_t pos = 0;
-    if (url.substr(0, 3) == "ws://" || url.substr(0, 7) == "http://") {
-        pos = url.find("://") + 3; use_tls = false; port = 80;
+    use_tls = false;
+    port = 80;
+
+    size_t scheme_end = url.find("://");
+    if (scheme_end != std::string::npos) {
+        std::string scheme = url.substr(0, scheme_end);
+        pos = scheme_end + 3;
+        if (scheme == "wss" || scheme == "https") { use_tls = true; port = 443; }
+        else if (scheme != "ws" && scheme != "http") return false;
     }
-    else if (url.substr(0, 6) == "wss://" || url.substr(0, 8) == "https://") {
-        pos = url.find("://") + 3; use_tls = true; port = 443;
-    }
-    else return false;
+    // scheme-less input (e.g. "host:8080") is treated as ws://
 
     size_t path_start = url.find('/', pos);
     size_t colon = url.find(':', pos);
@@ -77,7 +87,12 @@ bool WsClient::connect(const std::string& url, bool tor_proxy) {
 
     use_tls_ = tls;
 
-    if (tor_proxy) {
+    // Only route through Tor when the host is actually an .onion address;
+    // plain ws(s)/http(s) relays connect directly.
+    bool use_proxy = tor_proxy && host.size() > 6 &&
+                     host.compare(host.size() - 6, 6, ".onion") == 0;
+
+    if (use_proxy) {
         fd_ = socket(AF_INET, SOCK_STREAM, 0);
         if (fd_ < 0) return false;
 
@@ -217,17 +232,37 @@ bool WsClient::raw_send(const uint8_t* data, size_t len) {
     }
     return true;
 }
-
 bool WsClient::raw_recv(uint8_t* buf, size_t len, size_t* out_len) {
-    ssize_t n;
-    if (ssl_) n = SSL_read(ssl_, buf, len);
-    else {
-        struct pollfd pfd = {fd_, POLLIN, 0};
-        if (poll(&pfd, 1, 5000) <= 0) { *out_len = 0; return true; }
-        n = ::recv(fd_, buf, len, 0);
+    *out_len = 0;
+    if (len == 0) return true;
+
+    // Read exactly len bytes. poll() timeouts are NOT disconnects - an idle
+    // relay simply has nothing to send; only a real read error/close ends this.
+    size_t total = 0;
+    while (total < len) {
+        ssize_t n;
+        if (ssl_) {
+            n = SSL_read(ssl_, buf + total, len - total);
+            if (n <= 0) return false;
+        } else {
+            struct pollfd pfd = {fd_, POLLIN, 0};
+            int pr;
+            do {
+                pr = poll(&pfd, 1, 5000);
+            } while (pr == 0 && running_);
+            if (pr <= 0) return false;
+
+            n = ::recv(fd_, buf + total, len - total, 0);
+            if (n < 0) {
+                if (errno == EINTR || errno == EAGAIN) continue;
+                return false;
+            }
+            if (n == 0) return false;  // peer closed
+        }
+        total += static_cast<size_t>(n);
     }
-    if (n <= 0) { *out_len = 0; return false; }
-    *out_len = n;
+
+    *out_len = total;
     return true;
 }
 

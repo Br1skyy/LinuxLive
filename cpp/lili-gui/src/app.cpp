@@ -4,6 +4,7 @@
 #include <cstring>
 #include <cstdio>
 #include <ctime>
+#include <iostream>
 #include <pango/pango.h>
 
 namespace lili {
@@ -168,6 +169,9 @@ void App::init_session() {
     refresh_achievements();
     refresh_nodes();
     update_profile_summary();
+
+    auto relays = persistence_.load_relay_list();
+    if (!relays.empty()) connect_to_relay(relays.front());
 }
 
 void App::load_persisted_data() {
@@ -258,7 +262,11 @@ void App::connect_to_relay(const std::string& url) {
         }
     });
 
-    relay_.connect(url, true);
+    bool ok = relay_.connect(url, true);
+    update_relay_status(ok);
+    if (!ok) {
+        std::cerr << "LinuxLive: failed to connect to relay " << url << "\n";
+    }
 }
 
 void App::update_relay_status(bool connected) {
@@ -332,6 +340,18 @@ void App::on_remove_relay(GtkWidget* w, gpointer d) {
     self->refresh_relay_list();
 }
 
+void App::on_connect_relay_row(GtkWidget*, gpointer d) {
+    auto* self = app_data.self;
+    int idx = GPOINTER_TO_INT(d);
+
+    auto list = self->persistence_.load_relay_list();
+    if (idx < 0 || idx >= (int)list.size()) return;
+
+    std::string url = list[idx];
+    self->persistence_.save_relay_url(url);
+    self->connect_to_relay(url);
+}
+
 void App::on_generate_keypair(GtkWidget*, gpointer d) {
     auto* self = static_cast<App*>(d);
     auto id = self->identity_.generate("User");
@@ -360,8 +380,10 @@ void App::on_generate_keypair(GtkWidget*, gpointer d) {
 
 void App::on_backup_done(GtkWidget*, gpointer d) {
     auto* self = static_cast<App*>(d);
-    auto id = self->identity_.generate("User");  // Regenerate same keys
-    self->identity_.save(id);
+    // Save exactly the keys shown on the backup screen, not a fresh pair
+    auto id = self->identity_.login(self->current_privkey_hex_);
+    if (!id) return;
+    self->identity_.save(*id);
     self->logged_in_ = true;
     self->init_session();
     self->switch_to_main();
@@ -962,6 +984,12 @@ void App::refresh_relay_list() {
         gtk_label_set_xalign(GTK_LABEL(url_label), 0);
         gtk_widget_set_hexpand(url_label, TRUE);
         gtk_box_append(GTK_BOX(row), url_label);
+
+        GtkWidget* connect_btn = gtk_button_new_with_label("Connect");
+        gtk_widget_add_css_class(connect_btn, "suggested-action");
+        g_signal_connect(connect_btn, "clicked", G_CALLBACK(on_connect_relay_row),
+            GINT_TO_POINTER((int)i));
+        gtk_box_append(GTK_BOX(row), connect_btn);
 
         GtkWidget* remove_btn = gtk_button_new_with_label("Remove");
         gtk_widget_add_css_class(remove_btn, "destructive-action");
