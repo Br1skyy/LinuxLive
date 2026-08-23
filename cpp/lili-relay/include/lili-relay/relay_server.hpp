@@ -53,6 +53,7 @@ public:
     void start();
     void stop();
     bool is_running() const { return running_; }
+    bool is_listening() const { return listening_; }
 
     bool is_event_allowed(uint16_t kind) const;
     void allow_event_kind(uint16_t kind);
@@ -79,6 +80,8 @@ private:
     RelayConfig config_;
     std::vector<std::shared_ptr<ClientSession>> sessions_;
     std::atomic<bool> running_;
+    std::atomic<bool> listening_{false};
+    std::atomic<int> listen_fd_{-1};
     std::thread accept_thread_;
     std::thread prune_thread_;
 

@@ -91,7 +91,19 @@ int main(int argc, char* argv[]) {
 
     server.start();
 
-    // start() only spawns worker threads; block here until signalled
+    // start() only spawns worker threads; give the accept thread a moment to
+    // bind, then bail out with a clear error if the port is unavailable
+    for (int i = 0; i < 20 && !server.is_listening(); i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    if (!server.is_listening()) {
+        std::cerr << "Relay could not listen on port " << port
+                  << " - is another instance already using it?" << std::endl;
+        server.stop();
+        return 1;
+    }
+
+    // block here until signalled
     while (server.is_running()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }

@@ -41,7 +41,11 @@ void RelayServer::start() {
     accept_thread_ = std::thread([this]() { accept_connection(); });
     prune_thread_ = std::thread([this]() {
         while (running_) {
-            std::this_thread::sleep_for(std::chrono::seconds(300));
+            // sleep in short slices so stop() isn't blocked for up to 300s
+            for (int i = 0; i < 300 && running_; i++) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+            if (!running_) break;
             prune_old_events();
         }
     });
@@ -49,6 +53,10 @@ void RelayServer::start() {
 
 void RelayServer::stop() {
     running_ = false;
+    // wake the accept thread with shutdown(); it closes the fd itself after
+    // its loop exits, so only one side ever owns the close
+    int fd = listen_fd_.exchange(-1);
+    if (fd >= 0) shutdown(fd, SHUT_RDWR);
     for (auto& session : sessions_) {
         session->stop();
     }
@@ -329,8 +337,10 @@ void RelayServer::accept_connection() {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
         std::cerr << "Failed to create socket" << std::endl;
+        running_ = false;
         return;
     }
+    listen_fd_ = server_fd;
 
     int opt = 1;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
@@ -341,16 +351,22 @@ void RelayServer::accept_connection() {
     address.sin_port = htons(port_);
 
     if (bind(server_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
-        std::cerr << "Failed to bind socket" << std::endl;
+        std::cerr << "Failed to bind socket on port " << port_ << std::endl;
         close(server_fd);
+        listen_fd_ = -1;
+        running_ = false;
         return;
     }
 
     if (listen(server_fd, 3) < 0) {
-        std::cerr << "Failed to listen on socket" << std::endl;
+        std::cerr << "Failed to listen on port " << port_ << std::endl;
         close(server_fd);
+        listen_fd_ = -1;
+        running_ = false;
         return;
     }
+
+    listening_ = true;
 
     std::cout << "Relay server listening on port " << port_ << std::endl;
     std::cout << "Rate limit: " << config_.rate_limit_events << " events / "
