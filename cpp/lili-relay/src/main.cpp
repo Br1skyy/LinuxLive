@@ -1,5 +1,7 @@
 #include "lili-relay/relay_server.hpp"
 #include <iostream>
+#include <thread>
+#include <chrono>
 #include <csignal>
 #include <cstdlib>
 
@@ -89,5 +91,11 @@ int main(int argc, char* argv[]) {
 
     server.start();
 
+    // start() only spawns worker threads; block here until signalled
+    while (server.is_running()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    server.stop();
     return 0;
 }

@@ -300,7 +300,8 @@ void App::on_connect_relay(GtkWidget*, gpointer d) {
 }
 
 void App::on_add_relay(GtkWidget*, gpointer d) {
-    auto* self = static_cast<App*>(d);
+    (void)d;
+    auto* self = app_data.self;
     GtkEntryBuffer* buf = gtk_entry_get_buffer(GTK_ENTRY(self->relay_url_entry_));
     const char* url = gtk_entry_buffer_get_text(buf);
     if (!url || strlen(url) == 0) return;
@@ -705,7 +706,8 @@ void App::sync_achievements_from_relay() {
 }
 
 void App::on_export_achievements(GtkWidget*, gpointer d) {
-    auto* self = static_cast<App*>(d);
+    (void)d;
+    auto* self = app_data.self;
 
     GtkFileDialog* dialog = gtk_file_dialog_new();
     gtk_file_dialog_set_title(dialog, "Export Achievements");
@@ -727,7 +729,8 @@ void App::on_export_achievements(GtkWidget*, gpointer d) {
 }
 
 void App::on_import_achievements(GtkWidget*, gpointer d) {
-    auto* self = static_cast<App*>(d);
+    (void)d;
+    auto* self = app_data.self;
 
     GtkFileDialog* dialog = gtk_file_dialog_new();
     gtk_file_dialog_set_title(dialog, "Import Achievements");
@@ -971,7 +974,8 @@ void App::refresh_relay_list() {
 }
 
 void App::on_relay_url_changed(GtkEditable* ed, gpointer d) {
-    auto* self = static_cast<App*>(d);
+    (void)d;
+    auto* self = app_data.self;
     char* t = gtk_editable_get_chars(ed, 0, -1);
     self->persistence_.save_relay_url(t);
     g_free(t);

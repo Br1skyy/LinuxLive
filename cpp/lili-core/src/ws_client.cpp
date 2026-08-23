@@ -44,8 +44,12 @@ static bool parse_ws_url(const std::string& url, bool& use_tls, std::string& hos
     path = "/";
 
     size_t pos = 0;
-    if (url.substr(0, 3) == "ws://") { pos = 5; use_tls = false; port = 80; }
-    else if (url.substr(0, 6) == "wss://") { pos = 6; use_tls = true; port = 443; }
+    if (url.substr(0, 3) == "ws://" || url.substr(0, 7) == "http://") {
+        pos = url.find("://") + 3; use_tls = false; port = 80;
+    }
+    else if (url.substr(0, 6) == "wss://" || url.substr(0, 8) == "https://") {
+        pos = url.find("://") + 3; use_tls = true; port = 443;
+    }
     else return false;
 
     size_t path_start = url.find('/', pos);

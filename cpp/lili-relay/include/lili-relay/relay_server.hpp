@@ -52,6 +52,7 @@ public:
 
     void start();
     void stop();
+    bool is_running() const { return running_; }
 
     bool is_event_allowed(uint16_t kind) const;
     void allow_event_kind(uint16_t kind);
