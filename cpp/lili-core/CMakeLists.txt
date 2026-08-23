@@ -24,6 +24,10 @@ target_link_libraries(lili-core PUBLIC
     pthread
 )
 
+target_compile_definitions(lili-core PRIVATE
+    LILI_ACHIEVEMENTS_DIR="${CMAKE_SOURCE_DIR}/achievements"
+)
+
 target_compile_options(lili-core PRIVATE -Wall -Wextra -Wno-deprecated-declarations)
 
 if(BUILD_TESTING)

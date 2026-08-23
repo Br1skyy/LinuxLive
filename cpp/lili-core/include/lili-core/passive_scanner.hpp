@@ -8,6 +8,7 @@
 #include <atomic>
 #include <mutex>
 #include <chrono>
+#include <unordered_map>
 
 namespace lili {
 
@@ -62,6 +63,7 @@ private:
     bool check_time(const ScanCriteria& c);
 
     std::vector<StoredAchievement> achievements_;
+    std::unordered_map<std::string, ScanCriteria> criteria_by_id_;
     std::atomic<bool> running_{false};
     std::thread scan_thread_;
     mutable std::mutex mutex_;

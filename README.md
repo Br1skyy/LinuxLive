@@ -15,7 +15,7 @@ cpp/
   lili-sdk/          # C-ABI shared lib for game devs to hook into achievements
   lili-core/         # Identity, persistence, passive scanner, relay client
   lili-gui/          # GTK4 desktop app
-achievements/        # YAML definitions (20 achievements across 4 categories)
+achievements/        # YAML definitions loaded at runtime by the scanner
 ```
 
 ## Building

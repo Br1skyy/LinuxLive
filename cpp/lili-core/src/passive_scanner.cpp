@@ -5,9 +5,89 @@
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
+#include <filesystem>
+#include <map>
 #include <unistd.h>
 
 namespace lili {
+
+static std::string find_achievements_dir() {
+    namespace fs = std::filesystem;
+
+    if (const char* env = getenv("LILI_ACHIEVEMENTS_DIR")) {
+        if (fs::exists(env)) return env;
+    }
+
+    char buf[4096];
+    ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (len > 0) {
+        buf[len] = '\0';
+        fs::path dir = fs::path(buf).parent_path();
+        for (int up = 0; up <= 5; ++up) {
+            fs::path candidate = dir / "achievements";
+            if (fs::exists(candidate)) return candidate.string();
+            dir = dir.parent_path();
+        }
+    }
+
+#ifdef LILI_ACHIEVEMENTS_DIR
+    return LILI_ACHIEVEMENTS_DIR;
+#else
+    return "achievements";
+#endif
+}
+
+// Minimal reader for the flat key/value YAML used by achievements/*.yaml:
+// top-level scalars plus one nested block under "criteria:".
+using YamlMap = std::map<std::string, std::string>;
+
+static std::string yaml_trim(const std::string& s) {
+    size_t b = s.find_first_not_of(" \t\r\n");
+    if (b == std::string::npos) return "";
+    size_t e = s.find_last_not_of(" \t\r\n");
+    return s.substr(b, e - b + 1);
+}
+
+static std::string yaml_unquote(const std::string& v) {
+    if (v.size() >= 2 && ((v.front() == '"' && v.back() == '"') ||
+                          (v.front() == '\'' && v.back() == '\''))) {
+        return v.substr(1, v.size() - 2);
+    }
+    return v;
+}
+
+static bool parse_achievement_yaml(const std::string& path, YamlMap& out) {
+    std::ifstream f(path);
+    if (!f) return false;
+
+    std::string section;
+    std::string line;
+    while (std::getline(f, line)) {
+        auto hash = line.find('#');
+        if (hash != std::string::npos && (hash == 0 || line[hash - 1] == ' '))
+            line = line.substr(0, hash);
+
+        bool nested = !line.empty() && (line[0] == ' ' || line[0] == '\t');
+        std::string content = yaml_trim(line);
+        if (content.empty()) continue;
+
+        size_t colon = content.find(':');
+        if (colon == std::string::npos) continue;
+
+        std::string key = yaml_trim(content.substr(0, colon));
+        std::string value = yaml_trim(content.substr(colon + 1));
+
+        if (nested) {
+            if (!section.empty()) out[section + "." + key] = yaml_unquote(value);
+        } else if (value.empty()) {
+            section = key;
+        } else {
+            section.clear();
+            out[key] = yaml_unquote(value);
+        }
+    }
+    return true;
+}
 
 PassiveScanner::PassiveScanner() {}
 PassiveScanner::~PassiveScanner() { stop(); }
@@ -16,51 +96,63 @@ void PassiveScanner::set_persistence(Persistence* p) { persistence_ = p; }
 void PassiveScanner::set_unlock_callback(UnlockCallback cb) { unlock_callback_ = cb; }
 
 void PassiveScanner::load_definitions() {
-    struct Def { const char* id; const char* name; const char* desc; const char* tier; const char* cat; const char* icon; };
-    static const Def defs[] = {
-        {"arch-warrior",    "Arch Warrior",    "Running Arch Linux - by the way",                         "silver",   "distro",     "\xF0\x9F\x8F\x94\xEF\xB8\x8F"},
-        {"ubuntu-user",     "Ubuntu User",     "Running Ubuntu Linux",                                    "bronze",   "distro",     "Circle of Friends"},
-        {"fedora-user",     "Fedora User",     "Running Fedora Linux - the cutting edge",                 "bronze",   "distro",     "\xF0\x9F\x8E\xA9"},
-        {"void-walker",     "Void Walker",     "Running Void Linux - the init-less path",                 "silver",   "distro",     "\xE2\x9A\xAB"},
-        {"debian-stable",   "Debian Stable",   "Running Debian - the universal OS",                       "bronze",   "distro",     "Debian Swirl"},
-        {"distro-hopper",   "Distro Hopper",   "Detected 3+ different distros on this machine's history","gold",     "distro",     "\xF0\x9F\x94\x84"},
-        {"tiling-lord",     "Tiling Lord",     "Running a tiling window manager",                         "silver",   "system",     "\xF0\x9F\xAA\x9F"},
-        {"neovim-user",     "Neovim User",     "Neovim is installed - your fingers thank you",            "bronze",   "system",     "Green Box"},
-        {"x11-veteran",     "X11 Veteran",     "Still running X11 - respect the classics",                "bronze",   "system",     "\xF0\x9F\x93\xBA"},
-        {"wayland-pioneer", "Wayland Pioneer", "Running a Wayland display server",                        "bronze",   "system",     "\xF0\x9F\x8C\x8A"},
-        {"docker-captain",  "Docker Captain",  "Docker is installed and running",                         "bronze",   "system",     "\xF0\x9F\x90\xB3"},
-        {"systemd-lord",    "Systemd Lord",    "Managing 10 or more active services",                     "silver",   "system",     "\xE2\x9A\x99\xEF\xB8\x8F"},
-        {"kernel-tamer",    "Kernel Tamer",    "Running a custom-compiled kernel",                        "gold",     "system",     "\xF0\x9F\x94\xA7"},
-        {"platinum-linuxer","Platinum Linuxer", "Unlocked 90% of all achievements",                       "platinum", "milestones", "\xF0\x9F\x92\x8E"},
-        {"night-owl",       "Night Owl",       "Using LinuxLive past midnight",                            "bronze",   "milestones", "\xF0\x9F\xA6\x89"},
-        {"git-veteran",     "Git Veteran",     "Git is installed with 100+ commits in any repo",          "silver",   "milestones", "\xF0\x9F\x93\x8B"},
-        {"first-boot",      "First Boot",      "Completed your first boot into LinuxLive",                "bronze",   "milestones", "\xF0\x9F\x9A\x80"},
-        {"node-founder",    "Node Founder",    "Created your first chat node",                            "bronze",   "social",     "\xF0\x9F\x8F\xA0"},
-        {"chatterbox",      "Chatterbox",      "Sent 50 messages on LinuxLive",                           "silver",   "social",     "\xF0\x9F\x92\xAC"},
-        {"first-friend",    "First Friend",    "Added your first friend on LinuxLive",                    "bronze",   "social",     "\xF0\x9F\xA4\x9D"},
-    };
+    namespace fs = std::filesystem;
 
-    for (const auto& d : defs) {
-        StoredAchievement a;
-        a.id = d.id;
-        a.name = d.name;
-        a.description = d.desc;
-        a.tier = d.tier;
-        a.category = d.cat;
-        a.icon = d.icon;
-        a.unlocked = false;
-        a.unlocked_at = 0;
+    achievements_.clear();
+    criteria_by_id_.clear();
 
-        if (persistence_) {
-            auto saved = persistence_->load_achievements();
+    std::vector<StoredAchievement> saved;
+    if (persistence_) saved = persistence_->load_achievements();
+
+    std::string dir = find_achievements_dir();
+    std::error_code ec;
+    if (!fs::exists(dir, ec)) {
+        std::cerr << "LinuxLive: achievements directory not found: " << dir << "\n";
+        return;
+    }
+
+    for (const auto& category : fs::directory_iterator(dir, ec)) {
+        if (!category.is_directory()) continue;
+
+        for (const auto& entry : fs::directory_iterator(category.path())) {
+            std::string ext = entry.path().extension().string();
+            if (ext != ".yaml" && ext != ".yml") continue;
+
+            YamlMap y;
+            if (!parse_achievement_yaml(entry.path().string(), y) || !y.count("id")) continue;
+
+            StoredAchievement a;
+            a.id = y["id"];
+            a.name = y.count("name") ? y["name"] : a.id;
+            a.description = y.count("description") ? y["description"] : "";
+            a.tier = y.count("tier") ? y["tier"] : "bronze";
+            a.category = y.count("category") ? y["category"] : "";
+            a.icon = y.count("icon") ? y["icon"] : "";
+            a.unlocked = false;
+            a.unlocked_at = 0;
+
+            ScanCriteria c;
+            c.type = y["criteria.type"];
+            c.distro = y["criteria.distro"];
+            c.binary_name = y["criteria.name"];
+            c.display_protocol = y["criteria.protocol"];
+            c.wm_class = y["criteria.class"];
+            c.min_services = atoi(y["criteria.min_services"].c_str());
+            c.min_commits = atoi(y["criteria.min_commits"].c_str());
+            c.is_custom_kernel = y["criteria.custom"] == "true";
+            c.time_after_hour = atoi(y["criteria.after_hour"].c_str());
+            c.time_before_hour = atoi(y["criteria.before_hour"].c_str());
+
             for (const auto& s : saved) {
                 if (s.id == a.id && s.unlocked) {
                     a.unlocked = true;
                     a.unlocked_at = s.unlocked_at;
                 }
             }
+
+            criteria_by_id_[a.id] = c;
+            achievements_.push_back(a);
         }
-        achievements_.push_back(a);
     }
 }
 
@@ -90,26 +182,31 @@ std::vector<StoredAchievement> PassiveScanner::scan_now() {
     for (auto& ach : achievements_) {
         if (ach.unlocked) continue;
 
-        std::string type = ach.category;
+        auto it = criteria_by_id_.find(ach.id);
+        if (it == criteria_by_id_.end()) continue;
+
+        const ScanCriteria& c = it->second;
         bool unlocked = false;
 
-        if (ach.id == "first-boot") {
+        if (c.type == "always") {
             unlocked = true;
-        } else if (type == "distro") {
-            unlocked = check_os({.distro = ach.id});
-        } else if (type == "system") {
-            if (ach.id == "docker-captain") unlocked = check_binary({.binary_name = "docker"});
-            else if (ach.id == "neovim-user") unlocked = check_binary({.binary_name = "nvim"});
-            else if (ach.id == "wayland-pioneer") unlocked = check_display_server({.display_protocol = "wayland"});
-            else if (ach.id == "x11-veteran") unlocked = check_display_server({.display_protocol = "x11"});
-            else if (ach.id == "systemd-lord") unlocked = check_services({.min_services = 10});
-            else if (ach.id == "kernel-tamer") unlocked = check_kernel({.is_custom_kernel = true});
-            else if (ach.id == "tiling-lord") unlocked = check_window_manager({.wm_class = "tiling"});
-        } else if (type == "milestones") {
-            if (ach.id == "git-veteran") unlocked = check_git({.min_commits = 100});
-            else if (ach.id == "night-owl") unlocked = check_time({.time_after_hour = 0, .time_before_hour = 5});
-            else if (ach.id == "first-boot") unlocked = true;
-        } else if (type == "social") {
+        } else if (c.type == "os_detect") {
+            unlocked = check_os(c);
+        } else if (c.type == "binary") {
+            unlocked = check_binary(c);
+        } else if (c.type == "display_server") {
+            unlocked = check_display_server(c);
+        } else if (c.type == "window_manager") {
+            unlocked = check_window_manager(c);
+        } else if (c.type == "kernel") {
+            unlocked = check_kernel(c);
+        } else if (c.type == "git") {
+            unlocked = check_git(c);
+        } else if (c.type == "time") {
+            unlocked = check_time(c);
+        } else if (c.type == "services") {
+            unlocked = check_services(c);
+        } else if (c.type == "social") {
             continue;
         }
 
@@ -170,18 +267,7 @@ bool PassiveScanner::check_os(const ScanCriteria& c) {
         cached_distro_initialized_ = true;
     }
 
-    static const std::pair<std::string, std::string> distro_map[] = {
-        {"fedora-user", "fedora"},
-        {"ubuntu-user", "ubuntu"},
-        {"arch-warrior", "arch"},
-        {"debian-stable", "debian"},
-        {"void-walker", "void"},
-    };
-
-    for (const auto& [id, distro] : distro_map) {
-        if (c.distro == id && cached_distro_ == distro) return true;
-    }
-    return false;
+    return !c.distro.empty() && cached_distro_ == c.distro;
 }
 
 bool PassiveScanner::check_binary(const ScanCriteria& c) {
