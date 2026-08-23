@@ -72,8 +72,7 @@ public:
 
 private:
     void accept_connection();
-    void handle_client(std::shared_ptr<ClientSession> session);
-    void cleanup_sessions();
+    void handle_client_message(std::shared_ptr<ClientSession> session, const std::string& msg);
 
     uint16_t port_;
     RelayConfig config_;

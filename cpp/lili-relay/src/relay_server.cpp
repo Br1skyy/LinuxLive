@@ -1,10 +1,12 @@
 #include "lili-relay/relay_server.hpp"
 #include "lili-relay/client_session.hpp"
+#include "lili-relay/message_handler.hpp"
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include <algorithm>
+#include <nlohmann/json.hpp>
 
 namespace lili {
 
@@ -209,8 +211,121 @@ void RelayServer::print_stats() const {
     std::cout << "===================" << std::endl;
 }
 
+void RelayServer::handle_client_message(std::shared_ptr<ClientSession> session, const std::string& raw_msg) {
+    nlohmann::json msg;
+    try {
+        msg = nlohmann::json::parse(raw_msg);
+    } catch (...) {
+        return;
+    }
+
+    if (!msg.is_array() || msg.size() < 2) return;
+
+    std::string type = msg[0].get<std::string>();
+
+    if (type == "EVENT" && msg.size() >= 2) {
+        auto& event = msg[1];
+        std::string pubkey = event.value("pubkey", "");
+        uint16_t kind = event.value("kind", 0);
+
+        if (is_pubkey_banned(pubkey)) return;
+        if (!is_event_allowed(kind)) return;
+        if (!check_rate_limit(pubkey)) return;
+
+        StoredEvent se;
+        se.id = event.value("id", "");
+        se.pubkey = pubkey;
+        se.kind = kind;
+        se.content = event.value("content", "");
+        se.created_at = event.value("created_at", 0);
+        se.sig = event.value("sig", "");
+        se.size_bytes = raw_msg.size();
+
+        if (event.contains("tags")) {
+            for (auto& tag : event["tags"]) {
+                std::vector<std::string> t;
+                for (auto& e : tag) t.push_back(e.get<std::string>());
+                se.tags.push_back(t);
+            }
+        }
+
+        if (can_store_event(se)) {
+            store_event(se);
+            record_event(pubkey);
+        }
+
+        nlohmann::json ok = nlohmann::json::array();
+        ok.push_back("OK");
+        ok.push_back(se.id);
+        ok.push_back(true);
+        session->send_ws_text(ok.dump());
+
+        for (auto& s : sessions_) {
+            if (s != session && s->is_websocket() && s->is_running()) {
+                s->send_ws_text(raw_msg);
+            }
+        }
+
+    } else if (type == "REQ" && msg.size() >= 2) {
+        std::string sub_id = msg[1].get<std::string>();
+        nlohmann::json filter = (msg.size() >= 3) ? msg[2] : nlohmann::json::object();
+
+        std::lock_guard<std::mutex> lock(storage_mutex_);
+        for (const auto& e : events_) {
+            bool match = true;
+
+            if (filter.contains("kinds")) {
+                bool kind_match = false;
+                for (auto& k : filter["kinds"]) {
+                    if (k.get<int>() == e.kind) { kind_match = true; break; }
+                }
+                if (!kind_match) match = false;
+            }
+
+            if (filter.contains("authors") && match) {
+                bool author_match = false;
+                for (auto& a : filter["authors"]) {
+                    if (a.get<std::string>() == e.pubkey) { author_match = true; break; }
+                }
+                if (!author_match) match = false;
+            }
+
+            if (filter.contains("ids") && match) {
+                bool id_match = false;
+                for (auto& id : filter["ids"]) {
+                    if (id.get<std::string>() == e.id) { id_match = true; break; }
+                }
+                if (!id_match) match = false;
+            }
+
+            if (match) {
+                nlohmann::json ev;
+                ev["id"] = e.id;
+                ev["pubkey"] = e.pubkey;
+                ev["kind"] = e.kind;
+                ev["content"] = e.content;
+                ev["created_at"] = e.created_at;
+                ev["sig"] = e.sig;
+                ev["tags"] = e.tags;
+
+                nlohmann::json msg_arr = nlohmann::json::array();
+                msg_arr.push_back("EVENT");
+                msg_arr.push_back(sub_id);
+                msg_arr.push_back(ev);
+                session->send_ws_text(msg_arr.dump());
+            }
+        }
+
+        nlohmann::json eose = nlohmann::json::array();
+        eose.push_back("EOSE");
+        eose.push_back(sub_id);
+        session->send_ws_text(eose.dump());
+
+    } else if (type == "CLOSE" && msg.size() >= 2) {
+    }
+}
+
 void RelayServer::accept_connection() {
-    // TODO: upgrade from raw TCP to WebSocket - the Nostr spec expects WS
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
         std::cerr << "Failed to create socket" << std::endl;
@@ -250,25 +365,22 @@ void RelayServer::accept_connection() {
         int client_fd = accept(server_fd, nullptr, nullptr);
         if (client_fd >= 0) {
             auto session = std::make_shared<ClientSession>(client_fd);
+            session->set_on_message([this, session](const std::string& msg) {
+                handle_client_message(session, msg);
+            });
             sessions_.push_back(session);
             session->start();
+
+            sessions_.erase(
+                std::remove_if(sessions_.begin(), sessions_.end(),
+                    [](const std::shared_ptr<ClientSession>& s) {
+                        return !s->is_running();
+                    }),
+                sessions_.end());
         }
     }
 
     close(server_fd);
-}
-
-void RelayServer::handle_client(std::shared_ptr<ClientSession> session) {
-    session->start();
-}
-
-void RelayServer::cleanup_sessions() {
-    sessions_.erase(
-        std::remove_if(sessions_.begin(), sessions_.end(),
-            [](const std::shared_ptr<ClientSession>& s) {
-                return !s->is_running();
-            }),
-        sessions_.end());
 }
 
 }

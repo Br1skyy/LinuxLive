@@ -13,7 +13,7 @@ add_library(lili-relay-core
     src/message_handler.cpp
 )
 target_include_directories(lili-relay-core PUBLIC include)
-target_link_libraries(lili-relay-core PUBLIC lili-protocol OpenSSL::Crypto)
+target_link_libraries(lili-relay-core PUBLIC lili-protocol OpenSSL::SSL OpenSSL::Crypto)
 target_compile_options(lili-relay-core PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 add_executable(lili-relay src/main.cpp)
